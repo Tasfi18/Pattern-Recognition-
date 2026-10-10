@@ -8,19 +8,25 @@ Refactored version of the clustering code while preserving the main functionalit
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
+from pathlib import Path
 
-# =====================================================
-# Data Loading
-# =====================================================
-df = pd.read_csv("C:/Users/ADMIN/Desktop/pattern recognition/clustering_data.csv", header=None)
-print("Dataset Shape:", df.shape)
-print(df.head())
+HERE = Path(__file__).resolve().parent
 
-# =====================================================
-# User Input for Clusters
-# =====================================================
-ks = [int(input(f"Enter the number of clusters (k{i+1}): ")) for i in range(3)]
+
+def load_data():
+    return pd.read_csv(HERE / "clustering_data.csv", header=None)
+
+
+def ask_for_ks(n_points, count=3):
+    """Ask for `count` cluster sizes, each between 1 and the number of points."""
+    ks = []
+    while len(ks) < count:
+        answer = input(f"Enter the number of clusters (k{len(ks) + 1}): ").strip()
+        if answer.isdigit() and 1 <= int(answer) <= n_points:
+            ks.append(int(answer))
+        else:
+            print(f"Please enter a whole number from 1 to {n_points}.")
+    return ks
 
 # =====================================================
 # Helper Functions
@@ -54,8 +60,15 @@ def calculate_cluster_sums(distances, df, k, seed_points):
     return sum_x, sum_y, count
 
 def update_seeds(sum_x, sum_y, count, k, old_seeds):
-    """Update seed points based on cluster means."""
-    new_points = [[sum_x[i]/count[i], sum_y[i]/count[i]] for i in range(k)]
+    """Update seed points based on cluster means.
+
+    A cluster that lost all its points keeps its old centre instead of dividing by zero.
+    """
+    new_points = [
+        [sum_x[i] / count[i], sum_y[i] / count[i]] if count[i] > 0
+        else [old_seeds[0][i], old_seeds[1][i]]
+        for i in range(k)
+    ]
     new_seeds = pd.DataFrame(new_points, columns=[0, 1])
     return old_seeds, new_seeds
 
@@ -65,16 +78,18 @@ def WCSS(distances):
 
 def plot_clusters(df, distances, centroids, k, title):
     """Plot dataset with cluster assignments and centroids."""
-    colors = ["lightcoral", "lightskyblue", "lightgreen", "khaki", "lightgray"]
-    centroid_colors = ["red", "blue", "green", "orange", "black"]
+    # tab20 pairs a light and a dark shade of each colour; it repeats after 10 clusters
+    palette = plt.get_cmap("tab20")
+    colors = [palette((2 * j + 1) % 20) for j in range(k)]
+    centroid_colors = [palette((2 * j) % 20) for j in range(k)]
 
     for i in range(df.shape[0]):
         for j in range(k):
             if distances[i][1] == (centroids[0][j], centroids[1][j]):
-                plt.scatter(df[0][i], df[1][i], c=colors[j])
+                plt.scatter(df[0][i], df[1][i], color=colors[j])
 
     for i in range(k):
-        plt.scatter(centroids[0][i], centroids[1][i], c=centroid_colors[i], edgecolor='black')
+        plt.scatter(centroids[0][i], centroids[1][i], color=centroid_colors[i], edgecolor='black', s=120)
 
     plt.xlabel("X")
     plt.ylabel("Y")
@@ -84,7 +99,7 @@ def plot_clusters(df, distances, centroids, k, title):
 # =====================================================
 # Forgy Algorithm
 # =====================================================
-def forgy_algorithm(df, ks):
+def forgy_algorithm(df, ks, plot=True):
     wcss_list = []
     for k in ks:
         seeds = random_seeds(k, df)
@@ -109,7 +124,8 @@ def forgy_algorithm(df, ks):
         print(f"WCSS: {wcss}")
         wcss_list.append(wcss)
 
-        plot_clusters(df, distances, seeds, k, f"Forgy Clustering (k={k})")
+        if plot:
+            plot_clusters(df, distances, seeds, k, f"Forgy Clustering (k={k})")
     return wcss_list
 
 # =====================================================
@@ -151,7 +167,7 @@ def k_means_second_run(df, clusters, k):
         distances.append(min(dist_list))
     return distances
 
-def k_means_algorithm(df, ks):
+def k_means_algorithm(df, ks, plot=True):
     wcss_list = []
     for k in ks:
         seeds = random_seeds(k, df)
@@ -168,20 +184,28 @@ def k_means_algorithm(df, ks):
         wcss_list.append(wcss)
 
         centroids_df = pd.DataFrame(clusters, columns=[0, 1])
-        plot_clusters(df, distances, centroids_df, k, f"K-Means Clustering (k={k})")
+        if plot:
+            plot_clusters(df, distances, centroids_df, k, f"K-Means Clustering (k={k})")
     return wcss_list
 
 # =====================================================
 # Run Algorithms & Compare
 # =====================================================
-wcss_forgy = forgy_algorithm(df, ks)
-wcss_kmeans = k_means_algorithm(df, ks)
+if __name__ == "__main__":
+    df = load_data()
+    print("Dataset Shape:", df.shape)
+    print(df.head())
 
-# Plot WCSS vs k
-plt.plot(ks, wcss_forgy, label="Forgy")
-plt.plot(ks, wcss_kmeans, label="K-Means")
-plt.xlabel("k")
-plt.ylabel("WCSS")
-plt.title("WCSS vs k (Forgy vs K-Means)")
-plt.legend()
-plt.show()
+    ks = ask_for_ks(df.shape[0])
+
+    wcss_forgy = forgy_algorithm(df, ks)
+    wcss_kmeans = k_means_algorithm(df, ks)
+
+    # Plot WCSS vs k
+    plt.plot(ks, wcss_forgy, label="Forgy")
+    plt.plot(ks, wcss_kmeans, label="K-Means")
+    plt.xlabel("k")
+    plt.ylabel("WCSS")
+    plt.title("WCSS vs k (Forgy vs K-Means)")
+    plt.legend()
+    plt.show()
