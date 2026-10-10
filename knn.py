@@ -5,12 +5,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix
+from pathlib import Path
 
-# ----------------------------
-# Load Dataset
-# ----------------------------
-data = pd.read_csv(r"C:\Users\ADMIN\Desktop\pattern recognition\iris.csv")
-data = data.drop("Id", axis=1)
+HERE = Path(__file__).resolve().parent
+
+
+def load_iris():
+    data = pd.read_csv(HERE / "iris.csv")
+    return data.drop("Id", axis=1)
 
 # ----------------------------
 # KNN Class Implementation
@@ -44,16 +46,6 @@ class KNN:
         return y_pred
 
 # ----------------------------
-# Train/Test Split
-# ----------------------------
-X_train, X_test, y_train, y_test = train_test_split(
-    data.drop("Species", axis=1), 
-    data["Species"], 
-    test_size=0.5, 
-    random_state=42
-)
-
-# ----------------------------
 # Evaluation Function
 # ----------------------------
 def evaluate_knn(k_values, X_train, X_test, y_train, y_test):
@@ -67,31 +59,40 @@ def evaluate_knn(k_values, X_train, X_test, y_train, y_test):
         accuracies.append(acc)
 
         print(f"\nK = {k}, Accuracy = {acc*100:.2f}%")
-        cm = confusion_matrix(y_test, prediction)
+        labels = np.unique(np.concatenate([np.array(y_test), np.array(prediction)]))
+        cm = confusion_matrix(y_test, prediction, labels=labels)
 
         # Confusion matrix heatmap
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
-                    xticklabels=np.unique(y_test), 
-                    yticklabels=np.unique(y_test))
+                    xticklabels=labels, 
+                    yticklabels=labels)
         plt.title(f"Confusion Matrix (k={k})")
         plt.xlabel("Predicted")
         plt.ylabel("Actual")
         plt.show()
     return accuracies
 
-# ----------------------------
-# Run for k = 1, 3, 5, 7, 9
-# ----------------------------
-k_values = [1, 3, 5, 7, 9]
-accuracies = evaluate_knn(k_values, X_train, X_test, y_train, y_test)
+if __name__ == "__main__":
+    data = load_iris()
 
-# ----------------------------
-# Plot Accuracy vs K
-# ----------------------------
-plt.figure(figsize=(6,4))
-plt.plot(k_values, accuracies, marker="o")
-plt.title("Accuracy vs K")
-plt.xlabel("K")
-plt.ylabel("Accuracy")
-plt.grid(True)
-plt.show()
+    # Half the flowers for training, half for testing
+    X_train, X_test, y_train, y_test = train_test_split(
+        data.drop("Species", axis=1),
+        data["Species"],
+        test_size=0.5,
+        random_state=42
+    )
+
+    # Run for k = 1, 3, 5, 7, 9
+    k_values = [1, 3, 5, 7, 9]
+    accuracies = evaluate_knn(k_values, X_train, X_test, y_train, y_test)
+
+    # Plot accuracy vs k
+    plt.figure(figsize=(6,4))
+    plt.plot(k_values, accuracies, marker="o")
+    plt.title("Accuracy vs K")
+    plt.xlabel("K")
+    plt.ylabel("Accuracy")
+    plt.grid(True)
+    plt.show()
+
